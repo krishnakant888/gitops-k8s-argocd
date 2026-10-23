@@ -33,7 +33,8 @@ Workload scenarios (scenarios namespace):
   pending    Unschedulable pod (impossible resource request)
   bad-probe  Running but never Ready (readiness probe 404)
 Other: status | cleanup
-TXT ;;
+TXT
+    ;;
   error500)  load /_scenarios/error500 "$N" ;;
   error503)  load /_scenarios/error503 "$N" ;;
   notfound)  load /_scenarios/notfound "$N" ;;
