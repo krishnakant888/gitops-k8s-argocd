@@ -11,16 +11,263 @@ spec:
     targetRevision: 8.5.2
     helm:
       valuesObject:
-        # Loki data source provisioned from Git, no clicking
         datasources:
           datasources.yaml:
             apiVersion: 1
             datasources:
               - name: Loki
+                uid: loki
                 type: loki
                 access: proxy
                 url: http://loki-gateway.monitoring.svc.cluster.local
                 isDefault: true
+              - name: Prometheus
+                uid: prometheus
+                type: prometheus
+                access: proxy
+                url: http://prometheus-server.monitoring.svc.cluster.local
+        alerting:
+          contactpoints.yaml:
+            apiVersion: 1
+            contactPoints:
+              - orgId: 1
+                name: sre-agent
+                receivers:
+                  - uid: sre-agent-webhook
+                    type: webhook
+                    settings:
+                      url: http://sre-agent.sre.svc.cluster.local:8080/alert
+                      httpMethod: POST
+          policies.yaml:
+            apiVersion: 1
+            policies:
+              - orgId: 1
+                receiver: sre-agent
+                group_by: [alertname, namespace]
+                group_wait: 10s
+                group_interval: 1m
+                repeat_interval: 1h
+          rules.yaml:
+            apiVersion: 1
+            groups:
+              - orgId: 1
+                name: logs
+                folder: SRE
+                interval: 1m
+                rules:
+                  - uid: frontend-5xx
+                    title: Frontend 5xx burst
+                    condition: C
+                    for: 0s
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "More than 5 HTTP 5xx in 2m on frontend"
+                    data:
+                      - refId: A
+                        datasourceUid: loki
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'sum by (namespace) (count_over_time({namespace="frontend"} | json | status >= 500 [2m]))', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [5] }
+                  - uid: frontend-4xx
+                    title: Frontend 4xx burst
+                    condition: C
+                    for: 0s
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "More than 10 HTTP 4xx in 2m on frontend"
+                    data:
+                      - refId: A
+                        datasourceUid: loki
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'sum by (namespace) (count_over_time({namespace="frontend"} | json | status >= 400 | status < 500 [2m]))', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [10] }
+                  - uid: app-error-logs
+                    title: Error logs in app namespaces
+                    condition: C
+                    for: 0s
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "Error-level logs from a workload"
+                    data:
+                      - refId: A
+                        datasourceUid: loki
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'sum by (namespace) (count_over_time({namespace=~".+", namespace!~"kube-system|monitoring|argocd|frontend|sre"} |~ "(?i)level=error|fatal" [2m]))', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [0] }
+              - orgId: 1
+                name: kubernetes
+                folder: SRE
+                interval: 1m
+                rules:
+                  - uid: pod-crashloop
+                    title: Pod CrashLoopBackOff
+                    condition: C
+                    for: 1m
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "Container in CrashLoopBackOff"
+                    data:
+                      - refId: A
+                        datasourceUid: prometheus
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'max by (namespace, pod) (kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"})', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [0] }
+                  - uid: pod-image-pull
+                    title: Pod image pull failure
+                    condition: C
+                    for: 1m
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "Container cannot pull its image"
+                    data:
+                      - refId: A
+                        datasourceUid: prometheus
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'max by (namespace, pod) (kube_pod_container_status_waiting_reason{reason=~"ImagePullBackOff|ErrImagePull"})', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [0] }
+                  - uid: pod-oomkilled
+                    title: Pod OOMKilled
+                    condition: C
+                    for: 0s
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: critical }
+                    annotations:
+                      summary: "Container was OOMKilled"
+                    data:
+                      - refId: A
+                        datasourceUid: prometheus
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'max by (namespace, pod) (kube_pod_container_status_last_terminated_reason{reason="OOMKilled"})', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [0] }
+                  - uid: pod-pending
+                    title: Pod stuck Pending
+                    condition: C
+                    for: 2m
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "Pod Pending for 2m (unschedulable?)"
+                    data:
+                      - refId: A
+                        datasourceUid: prometheus
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'max by (namespace, pod) (kube_pod_status_phase{phase="Pending"})', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [0] }
+                  - uid: pod-not-ready
+                    title: Pod not Ready
+                    condition: C
+                    for: 3m
+                    noDataState: OK
+                    execErrState: Error
+                    labels: { severity: warning }
+                    annotations:
+                      summary: "Pod running but not Ready for 3m"
+                    data:
+                      - refId: A
+                        datasourceUid: prometheus
+                        relativeTimeRange: { from: 300, to: 0 }
+                        model: { refId: A, expr: 'max by (namespace, pod) (kube_pod_status_ready{condition="false", namespace!~"kube-system"})', queryType: instant, instant: true }
+                      - refId: B
+                        datasourceUid: __expr__
+                        model: { refId: B, type: reduce, expression: A, reducer: last, datasource: { type: __expr__, uid: __expr__ } }
+                      - refId: C
+                        datasourceUid: __expr__
+                        model:
+                          refId: C
+                          type: threshold
+                          expression: B
+                          datasource: { type: __expr__, uid: __expr__ }
+                          conditions:
+                            - evaluator: { type: gt, params: [0] }
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

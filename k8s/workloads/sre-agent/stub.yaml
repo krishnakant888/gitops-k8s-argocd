@@ -1,0 +1,37 @@
+# STUB receiver: logs every Grafana alert webhook it gets (full JSON body on stdout).
+# Replace the image/Deployment with the real SRE agent; keep the Service name and port.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sre-agent
+  labels: { app: sre-agent }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: sre-agent }
+  template:
+    metadata:
+      labels: { app: sre-agent }
+    spec:
+      containers:
+        - name: receiver
+          image: mendhak/http-https-echo:37
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: JSON_BODY_LIMIT, value: "5mb" }
+          readinessProbe:
+            tcpSocket: { port: http }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sre-agent
+  labels: { app: sre-agent }
+spec:
+  selector: { app: sre-agent }
+  ports:
+    - { name: http, port: 8080, targetPort: http }

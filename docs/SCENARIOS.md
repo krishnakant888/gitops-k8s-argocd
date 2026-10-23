@@ -20,3 +20,22 @@ In Grafana Explore: `{namespace="frontend"} | json | status >= 500`.
 | bad-probe | readiness 404 | Running, 0/1 Ready, probe failures | Probe misconfigured; not a crash |
 
 Pass criteria per scenario: the agent names the right workload, the right category, a plausible root cause, and does not blame unrelated services.
+
+## Alerting path
+Grafana alerting only (no Alertmanager). Rules, contact point and policy are provisioned from `k8s/apps/grafana.yaml`.
+
+    Loki logs / Prometheus (kube-state-metrics) -> Grafana alert rules -> webhook POST
+        -> http://sre-agent.sre.svc.cluster.local:8080/alert
+
+| Scenario | Alert rule | Source |
+|---|---|---|
+| error500, error503 | Frontend 5xx burst | Loki |
+| notfound | Frontend 4xx burst | Loki |
+| crashloop | Pod CrashLoopBackOff, Error logs in app namespaces | Prometheus, Loki |
+| bad-image | Pod image pull failure | Prometheus |
+| oom | Pod OOMKilled | Prometheus |
+| pending | Pod stuck Pending | Prometheus |
+| bad-probe | Pod not Ready | Prometheus |
+
+`k8s/workloads/sre-agent/stub.yaml` is a stub that only logs the webhook body: `kubectl -n sre logs deploy/sre-agent`.
+Replace it with the real agent and keep the Service name `sre-agent` and port 8080.
