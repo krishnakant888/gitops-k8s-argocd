@@ -6,8 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    # TODO: set to your Git remote once the repo is pushed
-    repoURL: https://github.com/YOUR_ORG/gitops-k8s-argocd.git
+    repoURL: https://github.com/krishnakant888/gitops-k8s-argocd.git
     targetRevision: main
     path: k8s/apps
     directory:
