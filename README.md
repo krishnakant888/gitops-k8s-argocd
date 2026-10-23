@@ -16,3 +16,8 @@ After that, add or change manifests in `k8s/apps/` and push; Argo CD syncs them.
 
 Query logs from Grafana (Explore). An SRE agent can call Loki directly:
 `http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/query_range`.
+
+## WSL note
+If kube-proxy crashes with `too many open files`, raise the inotify limits (as root in WSL) and restart the cluster pods:
+
+    sysctl -w fs.inotify.max_user_instances=8192 fs.inotify.max_user_watches=524288
