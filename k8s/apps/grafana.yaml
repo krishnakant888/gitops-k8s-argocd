@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: grafana
+    targetRevision: 8.5.2
+    helm:
+      valuesObject:
+        # Loki data source provisioned from Git, no clicking
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              - name: Loki
+                type: loki
+                access: proxy
+                url: http://loki-gateway.monitoring.svc.cluster.local
+                isDefault: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
