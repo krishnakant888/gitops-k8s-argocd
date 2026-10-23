@@ -14,6 +14,10 @@ spec:
         config:
           clients:
             - url: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+          snippets:
+            # minikube (docker runtime) writes docker-json logs; use `cri: {}` on AKS/containerd
+            pipelineStages:
+              - docker: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
