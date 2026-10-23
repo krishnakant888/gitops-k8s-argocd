@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-probe
+  namespace: scenarios
+  labels: { app: bad-probe, scenario: "true" }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: bad-probe }
+  template:
+    metadata:
+      labels: { app: bad-probe, scenario: "true" }
+    spec:
+      containers:
+        - name: app
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          readinessProbe:
+            httpGet: { path: /nope, port: 8080 }
+            periodSeconds: 3

@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log /dev/stderr warn;
+    pid /tmp/nginx.pid;
+    events { worker_connections 1024; }
+    http {
+      include /etc/nginx/mime.types;
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path /tmp/proxy_temp;
+      fastcgi_temp_path /tmp/fcgi_temp;
+      uwsgi_temp_path /tmp/uwsgi_temp;
+      scgi_temp_path /tmp/scgi_temp;
+
+      # Structured (JSON) access log: one line per request, level derived from status.
+      map $status $level { ~^5 "error"; ~^4 "warn"; default "info"; }
+      log_format json escape=json
+        '{"time":"$time_iso8601","level":"$level","msg":"request",'
+        '"request_id":"$request_id","remote_addr":"$remote_addr",'
+        '"method":"$request_method","uri":"$uri","status":$status,'
+        '"bytes":$body_bytes_sent,"duration_s":$request_time,'
+        '"user_agent":"$http_user_agent"}';
+      access_log /dev/stdout json;
+
+      server {
+        listen 8080;
+        root /usr/share/nginx/html;
+        add_header X-Request-Id $request_id always;
+
+        location = /healthz { access_log off; return 200 "ok\n"; }
+
+        # Fault injection used by scripts/scenarios.sh
+        location = /_scenarios/error500 { return 500 "injected failure\n"; }
+        location = /_scenarios/error503 { return 503 "injected unavailable\n"; }
+        location = /_scenarios/notfound { return 404 "injected not found\n"; }
+
+        location / { try_files $uri /index.html; }
+      }
+    }

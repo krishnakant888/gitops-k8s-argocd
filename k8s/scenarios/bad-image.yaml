@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-image
+  namespace: scenarios
+  labels: { app: bad-image, scenario: "true" }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: bad-image }
+  template:
+    metadata:
+      labels: { app: bad-image, scenario: "true" }
+    spec:
+      containers:
+        - name: app
+          image: nginxinc/nginx-unprivileged:does-not-exist

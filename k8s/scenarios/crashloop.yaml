@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop
+  namespace: scenarios
+  labels: { app: crashloop, scenario: "true" }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: crashloop }
+  template:
+    metadata:
+      labels: { app: crashloop, scenario: "true" }
+    spec:
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["sh","-c","echo \"level=error msg=\\\"fatal: cannot connect to database\\\"\"; exit 1"]

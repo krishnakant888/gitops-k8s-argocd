@@ -21,3 +21,7 @@ Query logs from Grafana (Explore). An SRE agent can call Loki directly:
 If kube-proxy crashes with `too many open files`, raise the inotify limits (as root in WSL) and restart the cluster pods:
 
     sysctl -w fs.inotify.max_user_instances=8192 fs.inotify.max_user_watches=524288
+
+## Frontend and SRE scenarios
+`k8s/workloads/frontend/` is a stateless nginx app (2 replicas, non-root, read-only filesystem, JSON logs) deployed by `k8s/apps/frontend.yaml`.
+Fault injection for testing an SRE agent: see `docs/SCENARIOS.md` and `scripts/scenarios.sh`.
